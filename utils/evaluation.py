@@ -22,17 +22,17 @@ def evaluate_strategy(stock, output):
 
   # Simulate trades based on signals
   current_pos = 0 # Intial Position 
-  max_shares = 100  # Maximum shares to buy or sell
+  max_shares = 1000  # Maximum shares to buy or sell
   for date, signal in output['Signal'].iteritems():
     if date in trades_df.index:
       price = prices.loc[date, 'adj close']  # Use .loc for label-based indexing
       if signal == 0 and current_pos < max_shares:  # Buy signal
-        shares_to_buy = min(max_shares - current_pos, 100)
+        shares_to_buy = min(max_shares - current_pos, 1000)
         trades_df.loc[date, stock] += shares_to_buy
         trades_df.loc[date, "Cash"] -= price * shares_to_buy
         current_pos += shares_to_buy
       elif signal == 1 and current_pos > -max_shares:  # Sell signal
-        shares_to_sell = min(max_shares + current_pos, 100)
+        shares_to_sell = min(max_shares + current_pos, 1000)
         trades_df.loc[date, stock] -= shares_to_sell
         trades_df.loc[date, "Cash"] += price * shares_to_sell
         current_pos -= shares_to_sell 
@@ -47,7 +47,7 @@ def evaluate_strategy(stock, output):
   # Calculate portfolio value
   values_df = pd.DataFrame(index=prices.index, columns=["Portfolio Value"])
   values_df['Portfolio Value'] = holdings_df[stock] * prices['adj close'] + holdings_df['Cash']
-  return values_df 	  	   		  		 		  		  		    	 		 		   		 		  
+  return trades_df, values_df  	   		  		 		  		  		    	 		 		   		 		  
 
 # Gets the return between two dates
 def get_benchmark(stock, sv=100000):
