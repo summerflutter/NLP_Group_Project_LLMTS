@@ -4,50 +4,87 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 def evaluate_strategy(stock, output):
-  # Get stock prices for AAPL
-  prices = pd.read_csv(f'{stock}.csv')[['date', 'adj close']]
-  prices = prices[(prices['date'] >= "2017-01-01") & (prices['date'] <= "2019-12-31")] # Testing split 
+    """
+    Simulates a trading strategy based on predefined buy and sell signals over a specified period. 
+    The function calculates and returns the detailed trade transactions and the overall portfolio value over time.
 
-  prices = prices.iloc[::-1]
-  prices['date'] = pd.to_datetime(prices['date'])
-  prices.set_index('date', inplace=True)
+    Parameters:
+    - stock (str): The ticker symbol of the stock for which the trading strategy is to be evaluated.
+    - output (pd.DataFrame): A DataFrame with signals for trading; '0' indicates a buy signal, 
+        and '1' indicates a sell signal. The DataFrame must be indexed by the date.
+
+    Returns:
+    - trades_df (pd.DataFrame): A DataFrame that records the trading actions taken (shares bought or sold) 
+        and the cash balance after each trade.
+    - values_df (pd.DataFrame): A DataFrame that tracks the total portfolio value over time, calculated as the 
+        sum of the cash balance and the market value of the stock holdings.
+
+    Details:
+    - The strategy uses historical price data from a CSV file, filtering data from January 1, 2017, to December 31, 2019.
+    - The strategy simulates trades by executing buy and sell orders based on the signals in the 'output' DataFrame. 
+        The trades are constrained by a maximum limit of 1000 shares that can be bought or sold at any given signal.
+    - The cash balance is adjusted according to the trades executed, and the stock positions are updated accordingly.
+    - The function assumes that the initial cash balance is $1,000,000, starting with no stock holdings.
+    - Cumulative holdings are calculated by accumulating trades over time to reflect the ongoing position in the stock 
+        and the cash balance.
+    - The portfolio value is computed by multiplying the number of shares held at each date by the stock's closing 
+        price on that date, adding it to the cash balance.
+
+    Example Usage:
+    >>> output = pd.DataFrame({'Signal': [0, 1, 0, 1]}, index=pd.date_range(start='2017-01-01', periods=4))
+    >>> trades_df, values_df = evaluate_strategy('AAPL', output)
+    >>> print(trades_df.head())
+    >>> print(values_df.head())
+
+    Note:
+    - The function assumes that the 'output' DataFrame dates align with the trading days in the stock's price data.
+        Ensure that non-trading days (weekends, holidays) are handled or excluded from the 'output' DataFrame prior to use.
+    """
+
+    # Get stock prices for AAPL
+    prices = pd.read_csv(f'{stock}.csv')[['date', 'adj close']]
+    prices = prices[(prices['date'] >= "2017-01-01") & (prices['date'] <= "2019-12-31")] # Testing split 
+
+    prices = prices.iloc[::-1]
+    prices['date'] = pd.to_datetime(prices['date'])
+    prices.set_index('date', inplace=True)
   
-  output.index = prices.index
+    output.index = prices.index
 
-  # Simulation 
-  start_val = 1000000
-  trades_df = pd.DataFrame(index=prices.index, columns=[stock, 'Cash'])
-  trades_df.fillna(0, inplace=True)
-  trades_df['Cash'] = 0  # Set initial cash
+    # Simulation 
+    start_val = 1000000
+    trades_df = pd.DataFrame(index=prices.index, columns=[stock, 'Cash'])
+    trades_df.fillna(0, inplace=True)
+    trades_df['Cash'] = 0  # Set initial cash
 
-  # Simulate trades based on signals
-  current_pos = 0 # Intial Position 
-  max_shares = 1000  # Maximum shares to buy or sell
-  for date, signal in output['Signal'].iteritems():
-    if date in trades_df.index:
-      price = prices.loc[date, 'adj close']  # Use .loc for label-based indexing
-      if signal == 0 and current_pos < max_shares:  # Buy signal
-        shares_to_buy = min(max_shares - current_pos, 1000)
-        trades_df.loc[date, stock] += shares_to_buy
-        trades_df.loc[date, "Cash"] -= price * shares_to_buy
-        current_pos += shares_to_buy
-      elif signal == 1 and current_pos > -max_shares:  # Sell signal
-        shares_to_sell = min(max_shares + current_pos, 1000)
-        trades_df.loc[date, stock] -= shares_to_sell
-        trades_df.loc[date, "Cash"] += price * shares_to_sell
-        current_pos -= shares_to_sell 
-  
-  # Calculate cumulative holdings
-  holdings_df = pd.DataFrame(0, index=trades_df.index, columns=trades_df.columns)
-  holdings_df.iloc[0, :-1] = trades_df.iloc[0, :-1]
-  holdings_df.iloc[0,-1] = start_val + trades_df.iloc[0, -1]
-  for i in range(1, len(holdings_df)):
-    holdings_df.iloc[i] = holdings_df.iloc[i - 1] + trades_df.iloc[i]        
+    # Simulate trades based on signals
+    current_pos = 0 # Intial Position 
+    max_shares = 1000  # Maximum shares to buy or sell
+    for date, signal in output['Signal'].iteritems():
+        if date in trades_df.index:
+            price = prices.loc[date, 'adj close']  # Use .loc for label-based indexing
+            if signal == 0 and current_pos < max_shares:  # Buy signal
+                shares_to_buy = min(max_shares - current_pos, 1000)
+                trades_df.loc[date, stock] += shares_to_buy
+                trades_df.loc[date, "Cash"] -= price * shares_to_buy
+                current_pos += shares_to_buy
+            elif signal == 1 and current_pos > -max_shares:  # Sell signal
+                shares_to_sell = min(max_shares + current_pos, 1000)
+                trades_df.loc[date, stock] -= shares_to_sell
+                trades_df.loc[date, "Cash"] += price * shares_to_sell
+                current_pos -= shares_to_sell 
+    
+    # Calculate cumulative holdings
+    holdings_df = pd.DataFrame(0, index=trades_df.index, columns=trades_df.columns)
+    holdings_df.iloc[0, :-1] = trades_df.iloc[0, :-1]
+    holdings_df.iloc[0,-1] = start_val + trades_df.iloc[0, -1]
+    for i in range(1, len(holdings_df)):
+        holdings_df.iloc[i] = holdings_df.iloc[i - 1] + trades_df.iloc[i]        
 
-  # Calculate portfolio value
-  values_df = pd.DataFrame(index=prices.index, columns=["Portfolio Value"])
-  values_df['Portfolio Value'] = holdings_df[stock] * prices['adj close'] + holdings_df['Cash']
-  return trades_df, values_df  	   		  		 		  		  		    	 		 		   		 		  
+    # Calculate portfolio value
+    values_df = pd.DataFrame(index=prices.index, columns=["Portfolio Value"])
+    values_df['Portfolio Value'] = holdings_df[stock] * prices['adj close'] + holdings_df['Cash']
+    return trades_df, values_df  	   		  		 		  		  		    	 		 		   		 		  
 
 # Gets the return between two dates
 def get_benchmark(stock, sv=100000):
@@ -134,7 +171,47 @@ def calculate_stats(values_df):
     return cum_ret, std_daily_rets, avg_daily_rets 	  
 
 def plot(trades_df, values_df, stock):
-    
+    """
+    Generates a plot comparing the performance of a trading strategy against a benchmark, 
+    along with visual indicators for trading actions. The plot shows the normalized value 
+    of the trading strategy and the benchmark, which allows for an easy comparison of 
+    performance over time. Trade entries for long and short positions are marked with 
+    vertical lines.
+
+    Parameters:
+    - trades_df (pd.DataFrame): A DataFrame indexed by date, containing trade quantities
+      for the specified stock. Positive values indicate buys (LONG entries) and negative 
+      values indicate sells (SHORT entries).
+    - values_df (pd.DataFrame): A DataFrame indexed by date containing the daily portfolio
+      value of the trading strategy.
+    - stock (str): The ticker symbol of the stock being traded and plotted.
+
+    Returns:
+    - None: This function does not return any value. Instead, it displays a plot and saves 
+      it to a file.
+
+    Details:
+    - The function first retrieves the benchmark performance using the `get_benchmark` function.
+    - Both the portfolio and benchmark values are normalized to 1 at the start of the period 
+      for comparability.
+    - It plots these normalized values, with the trading strategy in red and the benchmark in 
+      purple.
+    - Entry points for trades are marked: blue vertical lines for LONG entries and black for 
+      SHORT.
+    - The plot includes labels for the axes, a title, and a custom legend explaining all 
+      elements in the plot.
+    - The resulting plot is saved to a file named after the stock in a 'results' directory.
+
+    Usage Example:
+    >>> trades_df = pd.DataFrame({ 'AAPL': [100, -100, 0, 100]}, index=pd.date_range(start='2020-01-01', periods=4))
+    >>> values_df = pd.DataFrame({'Portfolio Value': [100000, 105000, 103000, 107000]}, index=pd.date_range(start='2020-01-01', periods=4))
+    >>> plot(trades_df, values_df, 'AAPL')
+
+    Note:
+    - This function relies on matplotlib for plotting, ensure this library is installed and 
+      imported as plt. It also uses Line2D from matplotlib.lines for custom legend entries.
+    """
+
     benchmark = get_benchmark(stock)
 
     # Normalize port_val and benchmark to 1.0 at the start
