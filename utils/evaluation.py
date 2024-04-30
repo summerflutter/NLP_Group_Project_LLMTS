@@ -2,6 +2,9 @@
 import pandas as pd 
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import os
+
+
 
 def evaluate_strategy(stock, output):
     """
@@ -42,13 +45,17 @@ def evaluate_strategy(stock, output):
     """
 
     # Get stock prices for AAPL
+   
     prices = pd.read_csv(f'{stock}.csv')[['date', 'adj close']]
+    prices['date']=pd.to_datetime(prices['date'],format='%Y-%m-%d')
     prices = prices[(prices['date'] >= "2017-01-01") & (prices['date'] <= "2019-12-31")] # Testing split 
-
+    prices= prices[prices['date'].isin(output.index)]
     prices = prices.iloc[::-1]
-    prices['date'] = pd.to_datetime(prices['date'])
+#     prices['date'] = pd.to_datetime(prices['date'])
     prices.set_index('date', inplace=True)
-  
+    
+    len(prices.index)
+    len(output.index)
     output.index = prices.index
 
     # Simulation 
@@ -60,7 +67,7 @@ def evaluate_strategy(stock, output):
     # Simulate trades based on signals
     current_pos = 0 # Intial Position 
     max_shares = 1000  # Maximum shares to buy or sell
-    for date, signal in output['Signal'].iteritems():
+    for date, signal in output['Signal'].items():
         if date in trades_df.index:
             price = prices.loc[date, 'adj close']  # Use .loc for label-based indexing
             if signal == 0 and current_pos < max_shares:  # Buy signal
