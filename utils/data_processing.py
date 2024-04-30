@@ -17,23 +17,21 @@ ppo_fast_ema = 12
 ppo_signal = 9
 
 def process_data(stock_list, start_date, end_date):
-  # TODO: create new folder 
   folder_name = 'data'
   try:
-      os.makedirs(folder_name, exist_ok=True)  # Use exist_ok=True to prevent an error if the folder already exists
-      print(f"Directory '{folder_name}' created successfully.")
+    os.makedirs(folder_name, exist_ok=True)  # Use exist_ok=True to prevent an error if the folder already exists
+    print(f"Directory '{folder_name}' created successfully.")
   except Exception as e:
-      print(f"Failed to create directory '{folder_name}'. Error: {e}")
-      return
+    print(f"Failed to create directory '{folder_name}'. Error: {e}")
+    return
 
   for stock in stock_list:
     df = pd.read_csv(f'{stock}.csv')
     df = df.iloc[::-1]
-    df['date'] = pd.to_datetime(df['date'])  
+    df['date'] = pd.to_datetime(df['date'])
     df = df[(df['date'] >= start_date) & (df['date'] <= end_date)]
 
     # 10 day SMA
-
     sma = df["adj close"].rolling(window=sma_window).mean()
     df["SMA"] = sma
 
@@ -41,7 +39,7 @@ def process_data(stock_list, start_date, end_date):
     indicator_bb = BollingerBands(close=df["adj close"])
     df['BB%'] = (df['adj close'] - indicator_bb.bollinger_lband()) / (indicator_bb.bollinger_hband() - indicator_bb.bollinger_lband())
 
-    # RSI 
+    # RSI
     rsi_indicator = RSIIndicator(close=df['adj close'])
     df['RSI'] = rsi_indicator.rsi()
 
@@ -49,7 +47,7 @@ def process_data(stock_list, start_date, end_date):
     cci_indicator = CCIIndicator(high=df['high'], low=df['low'], close=df['adj close'])
     df['CCI'] = cci_indicator.cci()
 
-    # PPO and PPO Signal 
+    # PPO and PPO Signal
     indicator_ppo = PercentagePriceOscillator(df['adj close'], window_slow=ppo_slow_ema, window_fast=ppo_fast_ema, window_sign=ppo_signal)
 
     # Create a DataFrame to store PPO and its signal line
@@ -57,48 +55,42 @@ def process_data(stock_list, start_date, end_date):
     df['PPO_signal'] = indicator_ppo.ppo_signal()
 
     # Get trading signal
-    df = assign_trading_signals(df) 
-    df = df[["date", "adj close", "SMA", "BB%", "RSI", "CCI", "PPO", "PPO_signal", "Signal"]]
-    
-    file_path = os.path.join(folder_name, f"{stock}_processed.csv")
-    df.to_csv(file_path, index=False)
+    df_labels = assign_trading_signals(df, stock)
+    df_labels = df_labels[["date", "adj close", "SMA", "BB%", "RSI", "CCI", "PPO", "PPO_signal", "Signal"]]
 
-def assign_trading_signals(df):
+    file_path = os.path.join(folder_name, f"{stock}_processed.csv")
+    df_labels.to_csv(file_path, index=False)
+
+# Get labels - theoretically the optimal moves to make
+def assign_trading_signals(df, stock):
   # Initialize a column for the signals, default to 2 (Hold)
   df['Signal'] = 2  # 2 represents 'Hold'
-    
+
   # Iterate through DataFrame rows
-  for i in range(1, len(df)):
-    buy_signals = 0
-    sell_signals = 0
+  prices = pd.read_csv(f'{stock}.csv')[['date', 'adj close']]
+  prices = prices[(prices['date'] >= start_date) & (prices['date'] <= end_date)] 
 
-    # PPO rule
-    if df['PPO'].iloc[i] > df['PPO_signal'].iloc[i] and df['PPO'].iloc[i-1] <= df['PPO_signal'].iloc[i-1]:
-      buy_signals += 1
-    elif df['PPO'].iloc[i] < df['PPO_signal'].iloc[i] and df['PPO'].iloc[i-1] >= df['PPO_signal'].iloc[i-1]:
-      sell_signals += 1
+  prices = prices.iloc[::-1]
+  prices['date'] = pd.to_datetime(prices['date'])
+  prices.set_index('date', inplace=True)
 
-    # CCI rule
-    if df['CCI'].iloc[i] > -100 and df['CCI'].iloc[i-1] <= -100:
-      buy_signals += 1
-    elif df['CCI'].iloc[i] < 100 and df['CCI'].iloc[i-1] >= 100:
-      sell_signals += 1
-
-    # Bollinger Bands % rule
-    if df['BB%'].iloc[i] > 0.2 and df['BB%'].iloc[i-1] <= 0.2:
-      buy_signals += 1
-    elif df['BB%'].iloc[i] < 0.8 and df['BB%'].iloc[i-1] >= 0.8:
-      sell_signals += 1
-
-    # RSI rule
-    if df['RSI'].iloc[i] > 30 and df['RSI'].iloc[i-1] <= 30:
-      buy_signals += 1
-    elif df['RSI'].iloc[i] < 70 and df['RSI'].iloc[i-1] >= 70:
-      sell_signals += 1
-
-    # Assign signals based on majority
-    if buy_signals > sell_signals:
-      df.loc[i, 'Signal'] = 0  # 0 represents 'Buy'
-    elif sell_signals > buy_signals:
-      df.loc[i, 'Signal'] = 1  # 1 represents 'Sell'
+  # columns = np.append(stocks, "Cash")
+  holdings = 1000
+  for i in range(len(prices) - 1):
+    next_price = prices['adj close'].iloc[i + 1]
+    curr_price = prices['adj close'].iloc[i]
+    if next_price > curr_price:
+      if holdings == 0:
+        df['Signal'].iloc[i] = 0
+        holdings += 1000
+      elif holdings == -1000:
+        df['Signal'].iloc[i] = 0
+        holdings += 2000
+    elif next_price < curr_price:
+      if holdings == 1000:
+        df['Signal'].iloc[i] = 1
+        holdings -= 2000
+      elif holdings == 0:
+        df['Signal'].iloc[i] = 1
+        holdings -= 1000
   return df
