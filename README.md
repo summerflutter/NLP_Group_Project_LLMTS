@@ -26,5 +26,5 @@ Prerequisites
 - Libraries: pandas, numpy, matplotlib, scikit-learn, statsmodels, xgboost, pytorch (for DeepAR and ChronosT5)
 
 ## Installation 
-- Clone the repository
+- Clone the repository: `git clone https://github.com/ManiMSA/NLP_Group_Project_LLMTS.git`
 - Install required Python packages: `pip install -r requirements.txt`
