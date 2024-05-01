@@ -59,7 +59,7 @@ def evaluate_strategy(stock, output):
     output.index = prices.index
 
     # Simulation 
-    start_val = 1000000
+    start_val = 100000
     trades_df = pd.DataFrame(index=prices.index, columns=[stock, 'Cash'])
     trades_df.fillna(0, inplace=True)
     trades_df['Cash'] = 0  # Set initial cash
